@@ -1,0 +1,52 @@
+data_to_import:=select *
+        from READ_PGSQL("PGSLQ-TPC-H10", "public", "lineitem")
+        limit 20
+    
+// format string k and string v to "k":"v"
+stringtotuple(k:string,v:string) := "\""+k+"\":\""+v+"\""
+// format string k and int v to "k":v
+inttotuple(k:string,v:int) := "\""+k+"\":"+v
+// format string k and long v to "k":v
+longtotuple(k:string,v:long) := "\""+k+"\":"+v
+// format string k and decimal k to "k":v
+decimaltotuple(k:string,v:decimal) := "\""+k+"\":"+v
+// format string k and date v to "k":"v"
+datetotuple(k:string,v:date) := stringtotuple(k,cast(v as string))
+// format string v to json style record { v }
+jsondocument(v:string) := "{"+v+"}"
+
+documents_to_create:=(select jsondocument( mkstring([  
+                        longtotuple("l_orderkey",l_orderkey),
+                        longtotuple("l_partkey",l_partkey),
+                        longtotuple("l_suppkey",l_suppkey),
+                        inttotuple("l_linenumber",l_linenumber),
+                        decimaltotuple("l_quantity",l_quantity),
+                        decimaltotuple("l_extendedprice",l_extendedprice),
+                        decimaltotuple("l_discount",l_discount),
+                        decimaltotuple("l_tax",l_tax),
+                        stringtotuple("l_returnflag",l_returnflag),
+                        stringtotuple("l_linestatus",l_linestatus),
+                        datetotuple("l_shipdate",l_shipdate),
+                        datetotuple("l_commitdate",l_commitdate),
+                        datetotuple("l_receiptdate",l_receiptdate),
+                        stringtotuple("l_shipinstruct",l_shipinstruct),
+                        stringtotuple("l_shipmode",l_shipmode),
+                        stringtotuple("l_comment",l_comment)],","))
+from data_to_import)
+
+// format string to cloudant bulk httprequest body 
+bulkbody(v:string) := "{ \"docs\": ["+v+"]}"
+
+data:=bulkbody(mkstring(documents_to_create,","))
+
+endpoint:="https://... your endpoint here ...-bluemix.cloudantnosqldb.appdomain.cloud/tpc-h/_bulk_docs"
+token:="... your token value here ..."
+
+HTTP(endpoint,
+    method:="POST",
+    headers:=[
+        ("Authorization", "Bearer "+ token),
+        ("Accept", "application/json"),
+        ("content-type","application/json")
+        ],
+    body:= data) 
